@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Precision Calc</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0B0B0F;
+      --surface:   #13131A;
+      --panel:     #1C1C28;
+      --border:    #2A2A3A;
+      --btn:       #1E1E2C;
+      --btn-hover: #28283C;
+      --btn-op:    #221830;
+      --btn-op-h:  #2E1F45;
+      --accent:    #7C3AED;
+      --accent2:   #A855F7;
+      --accent-g:  linear-gradient(135deg, #7C3AED, #A855F7);
+      --text:      #E2E8F0;
+      --text-dim:  #6B7280;
+      --text-op:   #C084FC;
+      --green:     #10B981;
+      --red:       #EF4444;
+      --orange:    #F59E0B;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,58,237,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent-g);
+      box-shadow: 0 0 12px rgba(124,58,237,0.6);
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+    .logo-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+    }
+    .header-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .icon-btn {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+    .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+    .icon-btn.active { color: var(--accent2); border-color: var(--accent); background: rgba(124,58,237,0.1); }
+
+    /* Display */
+    .display-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+    }
+    .display-wrap::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,58,237,0.5), transparent);
+    }
+
+    /* History */
+    .history {
+      padding: 10px 16px 6px;
+      height: 96px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .history::-webkit-scrollbar { width: 3px; }
+    .history::-webkit-scrollbar-track { background: transparent; }
+    .history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      opacity: 0;
+      animation: fadeIn 0.25s ease forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .h-expr {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+    .h-result {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--accent2);
+      white-space: nowrap;
+    }
+
+    /* Main display */
+    .display-main {
+      padding: 8px 18px 16px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .display-expr {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-dim);
+      min-height: 20px;
+      overflow-x: auto;
+      white-space: nowrap;
+      margin-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .display-expr::-webkit-scrollbar { display: none; }
+
+    .display-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 42px;
+      font-weight: 300;
+      line-height: 1.1;
+      color: var(--text);
+      overflow-x: auto;
+      white-space: nowrap;
+      text-align: right;
+      scrollbar-width: none;
+      transition: font-size 0.15s;
+      letter-spacing: -0.02em;
+    }
+    .display-value::-webkit-scrollbar { display: none; }
+    .display-value.sm { font-size: 28px; }
+    .display-value.xs { font-size: 20px; }
+    .display-value.error { color: var(--red); font-size: 18px; }
+
+    .display-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .angle-mode {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-dim);
+      background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.25);
+      padding: 2px 8px;
+      border-radius: 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .angle-mode:hover { background: rgba(124,58,237,0.25); color: var(--accent2); }
+    .precision-info {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-dim);
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 6px;
+      padding: 0 4px;
+    }
+    .mode-btn {
+      flex: 1;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .mode-btn.active {
+      background: rgba(124,58,237,0.2);
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+    .mode-btn:hover:not(.active) { color: var(--text); border-color: rgba(124,58,237,0.4); }
+
+    /* Scientific panel */
+    .sci-panel {
+      display: none;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+      padding: 0 0px;
+    }
+    .sci-panel.visible { display: grid; }
+
+    /* Button grid */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+    }
+
+    /* Buttons */
+    .btn {
+      position: relative;
+      height: 62px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--btn);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 400;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.08s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover { background: var(--btn-hover); border-color: rgba(124,58,237,0.35); }
+    .btn:active { transform: scale(0.95); }
+
+    /* Ripple */
+    .btn .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(124,58,237,0.25);
+      transform: scale(0);
+      animation: ripple 0.5s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes ripple {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    .btn.op {
+      background: var(--btn-op);
+      color: var(--text-op);
+      border-color: rgba(124,58,237,0.2);
+    }
+    .btn.op:hover { background: var(--btn-op-h); border-color: rgba(124,58,237,0.5); }
+
+    .btn.eq {
+      background: var(--accent-g);
+      color: #fff;
+      border-color: transparent;
+      font-size: 20px;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.35);
+    }
+    .btn.eq:hover { box-shadow: 0 6px 28px rgba(124,58,237,0.5); filter: brightness(1.1); }
+
+    .btn.clear {
+      color: var(--red);
+      border-color: rgba(239,68,68,0.2);
+    }
+    .btn.clear:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); }
+
+    .btn.del {
+      color: var(--orange);
+      border-color: rgba(245,158,11,0.2);
+    }
+    .btn.del:hover { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.4); }
+
+    .btn.zero { grid-column: span 2; font-size: 16px; }
+
+    .btn.sci-btn {
+      height: 40px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-dim);
+      border-color: rgba(255,255,255,0.06);
+    }
+    .btn.sci-btn:hover { color: var(--text); border-color: rgba(124,58,237,0.4); background: var(--btn-hover); }
+
+    /* Copy toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 18px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      opacity: 0;
+      transition: all 0.25s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* History panel */
+    .history-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .history-panel.open { display: flex; }
+    .history-sheet {
+      width: 100%;
+      max-width: 420px;
+      max-height: 70vh;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+      border-bottom: none;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .history-sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-sheet-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .history-list {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 50vh;
+    }
+    .history-row {
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--btn);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .history-row:hover { border-color: var(--accent); background: var(--btn-hover); }
+    .history-row .expr { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+    .history-row .res  { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: var(--accent2); margin-top: 2px; }
+    .history-empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 32px 0; }
+
+    @media (max-height: 700px) {
+      .display-value { font-size: 32px; }
+      .btn { height: 52px; }
+      .btn.sci-btn { height: 36px; }
+    }
+    @media (max-width: 360px) {
+      .btn { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-dot"></div>
+      <span class="logo-text">PRECISION CALC</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="historyBtn" title="ประวัติการคำนวณ">⏱</button>
+      <button class="icon-btn" id="copyBtn" title="คัดลอกผลลัพธ์">⎘</button>
+    </div>
+  </div>
+
+  <!-- Display -->
+  <div class="display-wrap">
+    <div class="history" id="miniHistory"></div>
+    <div class="display-main">
+      <div class="display-expr" id="displayExpr"></div>
+      <div class="display-value" id="displayValue">0</div>
+      <div class="display-meta">
+        <span class="angle-mode" id="angleMode">DEG</span>
+        <span class="precision-info" id="precInfo">64-bit precision</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="modeBasic" onclick="setMode('basic')">Basic</button>
+    <button class="mode-btn" id="modeSci" onclick="setMode('sci')">Scientific</button>
+  </div>
+
+  <!-- Scientific Panel -->
+  <div class="sci-panel" id="sciPanel">
+    <button class="btn sci-btn" onclick="sciInput('sin(')">sin</button>
+    <button class="btn sci-btn" onclick="sciInput('cos(')">cos</button>
+    <button class="btn sci-btn" onclick="sciInput('tan(')">tan</button>
+    <button class="btn sci-btn" onclick="sciInput('asin(')">sin⁻¹</button>
+    <button class="btn sci-btn" onclick="sciInput('acos(')">cos⁻¹</button>
+    <button class="btn sci-btn" onclick="sciInput('log(')">log</button>
+    <button class="btn sci-btn" onclick="sciInput('log2(')">log₂</button>
+    <button class="btn sci-btn" onclick="sciInput('ln(')">ln</button>
+    <button class="btn sci-btn" onclick="sciInput('exp(')">eˣ</button>
+    <button class="btn sci-btn" onclick="sciInput('sqrt(')">√</button>
+    <button class="btn sci-btn" onclick="sciInput('cbrt(')">∛</button>
+    <button class="btn sci-btn" onclick="sciInput('^2')">x²</button>
+    <button class="btn sci-btn" onclick="sciInput('^3')">x³</button>
+    <button class="btn sci-btn" onclick="sciInput('^(')">xⁿ</button>
+    <button class="btn sci-btn" onclick="sciInput('abs(')">|x|</button>
+    <button class="btn sci-btn" onclick="sciInput('factorial(')">n!</button>
+    <button class="btn sci-btn" onclick="sciInput('pi')">π</button>
+    <button class="btn sci-btn" onclick="sciInput('e')">e</button>
+    <button class="btn sci-btn" onclick="sciInput('1/(')">1/x</button>
+    <button class="btn sci-btn" onclick="sciInput('mod ')">mod</button>
+  </div>
+
+  <!-- Button Grid -->
+  <div class="btn-grid">
+    <button class="btn clear"  onclick="pressBtn('AC')">AC</button>
+    <button class="btn del"    onclick="pressBtn('DEL')">⌫</button>
+    <button class="btn op"     onclick="pressBtn('%')">%</button>
+    <button class="btn op"     onclick="pressBtn('/')">÷</button>
+
+    <button class="btn"        onclick="pressBtn('7')">7</button>
+    <button class="btn"        onclick="pressBtn('8')">8</button>
+    <button class="btn"        onclick="pressBtn('9')">9</button>
+    <button class="btn op"     onclick="pressBtn('*')">×</button>
+
+    <button class="btn"        onclick="pressBtn('4')">4</button>
+    <button class="btn"        onclick="pressBtn('5')">5</button>
+    <button class="btn"        onclick="pressBtn('6')">6</button>
+    <button class="btn op"     onclick="pressBtn('-')">−</button>
+
+    <button class="btn"        onclick="pressBtn('1')">1</button>
+    <button class="btn"        onclick="pressBtn('2')">2</button>
+    <button class="btn"        onclick="pressBtn('3')">3</button>
+    <button class="btn op"     onclick="pressBtn('+')">+</button>
+
+    <button class="btn zero"   onclick="pressBtn('0')">0</button>
+    <button class="btn"        onclick="pressBtn('.')">.</button>
+    <button class="btn eq"     onclick="pressBtn('=')">=</button>
+  </div>
+</div>
+
+<!-- History Panel -->
+<div class="history-panel" id="historyPanel" onclick="closeHistory(event)">
+  <div class="history-sheet">
+    <div class="history-sheet-header">
+      <span class="history-sheet-title">ประวัติการคำนวณ</span>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" onclick="clearHistory()" title="ล้างประวัติ" style="font-size:12px">ล้าง</button>
+        <button class="icon-btn" onclick="closeHistory()" title="ปิด">✕</button>
+      </div>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────
+  let input       = '';
+  let result      = '0';
+  let justEvaled  = false;
+  let angleUnit   = 'deg'; // 'deg' | 'rad'
+  let historyLog  = JSON.parse(localStorage.getItem('calcHistory') || '[]');
+  let currentMode = 'basic';
+
+  const mathScope = {};
+
+  // ─── Display ─────────────────────────────────────────────
+  function updateDisplay(val, expr = '') {
+    const dv = document.getElementById('displayValue');
+    const de = document.getElementById('displayExpr');
+
+    dv.className = 'display-value';
+    if (val.length > 20)       dv.classList.add('xs');
+    else if (val.length > 12)  dv.classList.add('sm');
+
+    dv.textContent = val;
+    de.textContent = expr;
+  }
+
+  function showError(msg) {
+    const dv = document.getElementById('displayValue');
+    dv.className = 'display-value error';
+    dv.textContent = msg;
+  }
+
+  // ─── Evaluate ────────────────────────────────────────────
+  function evaluate(expr) {
+    try {
+      // Replace display chars
+      let e = expr
+        .replace(/×/g, '*')
+        .replace(/÷/g, '/')
+        .replace(/−/g, '-')
+        .replace(/π/g, 'pi')
+        .replace(/mod /g, ' mod ')
+        .replace(/ln\(/g, 'log(');  // mathjs log = natural log
+
+      // Trig angle conversion
+      if (angleUnit === 'deg') {
+        e = e
+          .replace(/\bsin\(/g, 'sin(')
+          .replace(/\bcos\(/g, 'cos(')
+          .replace(/\btan\(/g, 'tan(');
+
+        // Wrap trig args with degree conversion
+        const degWrap = (fn) =>
+          e.replace(new RegExp(`\\b${fn}\\(`, 'g'), `${fn}(pi/180*`);
+
+        // For forward trig, wrap
+        if (/\b(sin|cos|tan)\(/.test(e)) {
+          e = e.replace(/\bsin\(/g, '__sin(pi/180*');
+          e = e.replace(/\bcos\(/g, '__cos(pi/180*');
+          e = e.replace(/\btan\(/g, '__tan(pi/180*');
+          e = e.replace(/__sin/g, 'sin');
+          e = e.replace(/__cos/g, 'cos');
+          e = e.replace(/__tan/g, 'tan');
+        }
+        // For inverse trig, result → degrees
+        const hasInv = /\b(asin|acos|atan)\(/.test(e);
+        if (hasInv) {
+          e = `(${e}) * (180/pi)`;
+        }
+      }
+
+      const ans = math.evaluate(e, mathScope);
+      if (typeof ans === 'object' && ans !== null) {
+        return formatNum(ans.valueOf ? ans.valueOf() : String(ans));
+      }
+      return formatNum(ans);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function formatNum(n) {
+    if (typeof n !== 'number') return String(n);
+    if (!isFinite(n)) return n > 0 ? 'Infinity' : '-Infinity';
+    if (isNaN(n)) return 'Error';
+
+    // Use toPrecision for large/small, else toFixed avoiding float noise
+    if (Math.abs(n) >= 1e15 || (Math.abs(n) < 1e-10 && n !== 0)) {
+      return n.toPrecision(10).replace(/\.?0+$/, '');
+    }
+
+    // Round to 12 significant figures to remove float errors
+    const rounded = parseFloat(n.toPrecision(12));
+    let s = rounded.toString();
+    return s;
+  }
+
+  // ─── Buttons ─────────────────────────────────────────────
+  function pressBtn(v) {
+    if (v === 'AC') {
+      input = ''; result = '0'; justEvaled = false;
+      updateDisplay('0', '');
+      return;
+    }
+    if (v === 'DEL') {
+      if (justEvaled) { input = ''; justEvaled = false; updateDisplay('0',''); return; }
+      input = input.slice(0, -1);
+      const live = input ? evaluate(input) : '0';
+      updateDisplay(input || '0', '');
+      return;
+    }
+    if (v === '=') {
+      if (!input) return;
+      const res = evaluate(input);
+      if (res === null) { showError('Syntax Error'); return; }
+      addHistory(input, res);
+      updateDisplay(res, input + ' =');
+      addMiniHistory(input, res);
+      input = res;
+      justEvaled = true;
+      return;
+    }
+
+    // Operators after eval: use result
+    const ops = ['+','-','*','/','%','^'];
+    if (justEvaled && ops.includes(v)) {
+      justEvaled = false;
+    } else if (justEvaled) {
+      input = ''; justEvaled = false;
+    }
+
+    // Prevent double ops
+    const lastChar = input.slice(-1);
+    if (ops.includes(v) && ops.includes(lastChar)) {
+      input = input.slice(0, -1);
+    }
+
+    if (v === '%') {
+      // Append /100 for percentage
+      input += '/100';
+    } else {
+      input += v;
+    }
+
+    const live = evaluate(input);
+    if (live !== null) {
+      updateDisplay(live, input);
+    } else {
+      updateDisplay(input, '');
+    }
+  }
+
+  function sciInput(s) {
+    if (justEvaled) { justEvaled = false; }
+    input += s;
+    const live = evaluate(input);
+    updateDisplay(live !== null ? live : input, input);
+  }
+
+  // ─── Mini history (in display) ───────────────────────────
+  function addMiniHistory(expr, res) {
+    const container = document.getElementById('miniHistory');
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `<span class="h-expr">${expr}</span><span class="h-result">= ${res}</span>`;
+    container.appendChild(item);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // ─── Full history ────────────────────────────────────────
+  function addHistory(expr, res) {
+    historyLog.unshift({ expr, res, ts: Date.now() });
+    if (historyLog.length > 100) historyLog = historyLog.slice(0, 100);
+    localStorage.setItem('calcHistory', JSON.stringify(historyLog));
+  }
+
+  function renderHistoryPanel() {
+    const list = document.getElementById('historyList');
+    if (!historyLog.length) {
+      list.innerHTML = '<div class="history-empty">ยังไม่มีประวัติการคำนวณ</div>';
+      return;
+    }
+    list.innerHTML = historyLog.map((h, i) => `
+      <div class="history-row" onclick="recallHistory(${i})">
+        <div class="expr">${h.expr}</div>
+        <div class="res">= ${h.res}</div>
+      </div>
+    `).join('');
+  }
+
+  function recallHistory(i) {
+    input = historyLog[i].res;
+    justEvaled = false;
+    updateDisplay(input, '');
+    closeHistory();
+  }
+
+  function clearHistory() {
+    historyLog = [];
+    localStorage.removeItem('calcHistory');
+    document.getElementById('miniHistory').innerHTML = '';
+    renderHistoryPanel();
+  }
+
+  document.getElementById('historyBtn').addEventListener('click', () => {
+    renderHistoryPanel();
+    document.getElementById('historyPanel').classList.add('open');
+    document.getElementById('historyBtn').classList.add('active');
+  });
+
+  function closeHistory(e) {
+    if (!e || e.target === document.getElementById('historyPanel') || e.currentTarget === document.getElementById('historyBtn') || !e.target.closest) {
+      document.getElementById('historyPanel').classList.remove('open');
+      document.getElementById('historyBtn').classList.remove('active');
+    }
+  }
+
+  // ─── Copy ────────────────────────────────────────────────
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    const val = document.getElementById('displayValue').textContent;
+    navigator.clipboard.writeText(val).then(() => showToast('คัดลอกแล้ว ✓'));
+  });
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  // ─── Angle Mode ──────────────────────────────────────────
+  document.getElementById('angleMode').addEventListener('click', () => {
+    angleUnit = angleUnit === 'deg' ? 'rad' : 'deg';
+    document.getElementById('angleMode').textContent = angleUnit.toUpperCase();
+    if (input) {
+      const live = evaluate(input);
+      if (live) updateDisplay(live, input);
+    }
+  });
+
+  // ─── Mode Toggle ─────────────────────────────────────────
+  function setMode(m) {
+    currentMode = m;
+    document.getElementById('modeBasic').classList.toggle('active', m === 'basic');
+    document.getElementById('modeSci').classList.toggle('active', m === 'sci');
+    document.getElementById('sciPanel').classList.toggle('visible', m === 'sci');
+  }
+
+  // ─── Ripple Effect ───────────────────────────────────────
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      const r = document.createElement('span');
+      r.className = 'ripple';
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px`;
+      btn.appendChild(r);
+      r.addEventListener('animationend', () => r.remove());
+    });
+  });
+
+  // ─── Keyboard ────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    const k = e.key;
+    if (e.ctrlKey || e.metaKey) return;
+
+    if ('0123456789'.includes(k)) pressBtn(k);
+    else if (k === '+') pressBtn('+');
+    else if (k === '-') pressBtn('-');
+    else if (k === '*') pressBtn('*');
+    else if (k === '/') { e.preventDefault(); pressBtn('/'); }
+    else if (k === '%') pressBtn('%');
+    else if (k === '.') pressBtn('.');
+    else if (k === 'Enter' || k === '=') pressBtn('=');
+    else if (k === 'Backspace') pressBtn('DEL');
+    else if (k === 'Escape') pressBtn('AC');
+    else if (k === '(') { input += '('; updateDisplay(input, ''); }
+    else if (k === ')') { input += ')'; updateDisplay(input, ''); }
+  });
+
+  // ─── Init ─────────────────────────────────────────────────
+  // Restore mini history
+  historyLog.slice(0, 5).reverse().forEach(h => addMiniHistory(h.expr, h.res));
+</script>
+</body>
+</html>
